@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ovh-credentials
+type: Opaque
+data:
+  OVH_APPLICATION_KEY: ${OVH_APPLICATION_KEY_BASE64}
+  OVH_APPLICATION_SECRET: ${OVH_APPLICATION_SECRET_BASE64}
+  OVH_CONSUMER_KEY: ${OVH_CONSUMER_KEY_BASE64}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ovh-dns-updater
+  labels:
+    app: ovh-dns-updater
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ovh-dns-updater
+  template:
+    metadata:
+      labels:
+        app: ovh-dns-updater
+    spec:
+      containers:
+      - name: ovh-dns-updater
+        image: ovh-dns-updater:latest
+        env:
+        - name: OVH_APPLICATION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ovh-credentials
+              key: OVH_APPLICATION_KEY
+        - name: OVH_APPLICATION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ovh-credentials
+              key: OVH_APPLICATION_SECRET
+        - name: OVH_CONSUMER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ovh-credentials
+              key: OVH_CONSUMER_KEY
+        - name: OVH_ENDPOINT
+          value: "ovh-eu"
+        - name: DNS_ZONE
+          value: "${YOUR_DOMAIN}"
+        - name: DNS_RECORD
+          value: "${YOUR_SUBDOMAIN}"
+        - name: CHECK_INTERVAL
+          value: "5m"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
