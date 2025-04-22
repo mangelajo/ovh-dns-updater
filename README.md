@@ -32,14 +32,14 @@ Optional environment variables:
 
 ## Container Images
 
-Pre-built container images are available on Quay.io:
+Pre-built container images are available on GitHub Container Registry:
 
 ```bash
 # Latest from main branch
-docker pull quay.io/mangelajo/ovh-dns-updater:main
+docker pull ghcr.io/mangelajo/ovh-dns-updater:main
 
 # Specific version
-docker pull quay.io/mangelajo/ovh-dns-updater:v1.0.0
+docker pull ghcr.io/mangelajo/ovh-dns-updater:v1.0.0
 ```
 
 The following architectures are supported:
@@ -50,7 +50,7 @@ The following architectures are supported:
 
 This repository includes a GitHub Actions workflow that:
 1. Runs tests on every PR and commit
-2. Builds and pushes container images to Quay.io on:
+2. Builds and pushes container images to GitHub Container Registry on:
    - Every push to main (tagged as `:main`)
    - Every tag (tagged as `:v1.0.0`, `:1.0`, etc.)
    - Every PR (tagged with PR number)
