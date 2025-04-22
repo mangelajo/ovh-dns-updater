@@ -57,19 +57,37 @@ This repository includes a GitHub Actions workflow that:
 
 ## Deployment
 
-1. Create a secret with your OVH credentials:
+1. Create a Kubernetes secret with your OVH credentials:
    ```bash
-   # Convert your credentials to base64
-   echo -n "your-app-key" | base64
-   echo -n "your-app-secret" | base64
-   echo -n "your-consumer-key" | base64
+   # Method 1: Create the secret directly (recommended)
+   kubectl create secret generic ovh-dns-updater-secret \
+     --from-literal=OVH_APPLICATION_KEY='your-app-key' \
+     --from-literal=OVH_APPLICATION_SECRET='your-app-secret' \
+     --from-literal=OVH_CONSUMER_KEY='your-consumer-key'
 
-   # Update the values in k8s/deployment.yaml with the base64 encoded values
+   # Method 2: Using YAML
+   cat <<EOF | kubectl apply -f -
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: ovh-dns-updater-secret
+   type: Opaque
+   stringData:
+     OVH_APPLICATION_KEY: your-app-key
+     OVH_APPLICATION_SECRET: your-app-secret
+     OVH_CONSUMER_KEY: your-consumer-key
+   EOF
    ```
 
-3. Update the DNS_ZONE and DNS_RECORD values in k8s/deployment.yaml
+2. Create a ConfigMap for your DNS configuration:
+   ```bash
+   kubectl create configmap ovh-dns-updater-config \
+     --from-literal=DNS_ZONE='example.com' \
+     --from-literal=DNS_RECORD='home' \
+     --from-literal=CHECK_INTERVAL='5m'
+   ```
 
-4. Apply the Kubernetes configuration:
+3. Apply the Kubernetes deployment:
    ```bash
    kubectl apply -f k8s/deployment.yaml
    ```

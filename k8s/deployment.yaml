@@ -1,13 +1,3 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ovh-credentials
-type: Opaque
-data:
-  OVH_APPLICATION_KEY: ${OVH_APPLICATION_KEY_BASE64}
-  OVH_APPLICATION_SECRET: ${OVH_APPLICATION_SECRET_BASE64}
-  OVH_CONSUMER_KEY: ${OVH_CONSUMER_KEY_BASE64}
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,31 +16,43 @@ spec:
     spec:
       containers:
       - name: ovh-dns-updater
-        image: ovh-dns-updater:latest
+        image: ghcr.io/mangelajo/ovh-dns-updater:main
+        imagePullPolicy: Always
         env:
         - name: OVH_APPLICATION_KEY
           valueFrom:
             secretKeyRef:
-              name: ovh-credentials
+              name: ovh-dns-updater-secret
               key: OVH_APPLICATION_KEY
         - name: OVH_APPLICATION_SECRET
           valueFrom:
             secretKeyRef:
-              name: ovh-credentials
+              name: ovh-dns-updater-secret
               key: OVH_APPLICATION_SECRET
         - name: OVH_CONSUMER_KEY
           valueFrom:
             secretKeyRef:
-              name: ovh-credentials
+              name: ovh-dns-updater-secret
               key: OVH_CONSUMER_KEY
         - name: OVH_ENDPOINT
           value: "ovh-eu"
         - name: DNS_ZONE
-          value: "${YOUR_DOMAIN}"
+          valueFrom:
+            configMapKeyRef:
+              name: ovh-dns-updater-config
+              key: DNS_ZONE
         - name: DNS_RECORD
-          value: "${YOUR_SUBDOMAIN}"
+          valueFrom:
+            configMapKeyRef:
+              name: ovh-dns-updater-config
+              key: DNS_RECORD
+              optional: true
         - name: CHECK_INTERVAL
-          value: "5m"
+          valueFrom:
+            configMapKeyRef:
+              name: ovh-dns-updater-config
+              key: CHECK_INTERVAL
+              optional: true
         resources:
           requests:
             cpu: 100m
