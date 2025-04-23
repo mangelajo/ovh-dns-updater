@@ -17,14 +17,30 @@ type recordUpdate struct {
 func updateDNS(client *ovh.Client, zone, record, ip string) {
         // Get the record ID
         var records []int
-        err := client.Get(fmt.Sprintf("/domain/zone/%s/record?fieldType=A&subDomain=%s", zone, record), &records)
-        if err != nil {
-                log.Printf("Error getting DNS records for %s.%s: %v", record, zone, err)
-                return
+        var err error
+
+        if record == "@" || record == "" {
+                // For apex domain (@ or empty string)
+                err = client.Get(fmt.Sprintf("/domain/zone/%s/record?fieldType=A&subDomain=", zone), &records)
+                if err != nil {
+                        log.Printf("Error getting DNS records for %s: %v", zone, err)
+                        return
+                }
+        } else {
+                // For subdomains
+                err = client.Get(fmt.Sprintf("/domain/zone/%s/record?fieldType=A&subDomain=%s", zone, record), &records)
+                if err != nil {
+                        log.Printf("Error getting DNS records for %s.%s: %v", record, zone, err)
+                        return
+                }
         }
 
         if len(records) == 0 {
-                log.Printf("No DNS record found for %s.%s", record, zone)
+                if record == "@" || record == "" {
+                        log.Printf("No DNS record found for %s", zone)
+                } else {
+                        log.Printf("No DNS record found for %s.%s", record, zone)
+                }
                 return
         }
 
@@ -45,7 +61,11 @@ func updateDNS(client *ovh.Client, zone, record, ip string) {
                 return
         }
 
-        log.Printf("Updated DNS record %s.%s to %s", record, zone, ip)
+        if record == "@" || record == "" {
+                log.Printf("Updated DNS record for %s to %s", zone, ip)
+        } else {
+                log.Printf("Updated DNS record %s.%s to %s", record, zone, ip)
+        }
 }
 
 func updateAllDomains(client *ovh.Client, domains []DomainConfig, ip string) {

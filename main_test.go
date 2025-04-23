@@ -105,11 +105,11 @@ func TestUpdateAllDomains(t *testing.T) {
         domains := []DomainConfig{
                 {
                         Zone:    "example.com",
-                        Records: []string{"home", "office"},
+                        Records: []string{"home", "office", "@"},
                 },
                 {
                         Zone:    "another.com",
-                        Records: []string{"vpn"},
+                        Records: []string{"vpn", ""},
                 },
         }
 
@@ -129,9 +129,9 @@ func TestMainFunction(t *testing.T) {
         os.Setenv("DOMAINS_CONFIG", `
 domains:
   - zone: example.com
-    records: ["test1", "test2"]
+    records: ["test1", "test2", "@"]
   - zone: another.com
-    records: ["test3"]
+    records: ["test3", ""]
 `)
         os.Setenv("CHECK_INTERVAL", "1s")
         defer func() {

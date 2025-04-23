@@ -25,12 +25,16 @@ Example domains configuration:
 domains:
   - zone: example.com
     records:
-      - home
-      - office
+      - home     # Updates home.example.com
+      - office   # Updates office.example.com
+      - "@"      # Updates example.com (apex domain)
   - zone: another.com
     records:
-      - vpn
+      - vpn      # Updates vpn.another.com
+      - ""       # Updates another.com (apex domain)
 ```
+
+Note: To update the apex domain (the domain itself without any subdomain), you can use either `"@"` or an empty string `""` in the records list.
 
 ## Running with Docker
 
@@ -38,11 +42,16 @@ domains:
 docker run -e DOMAINS_CONFIG='domains:
   - zone: example.com
     records:
-      - home
-      - office' \
+      - home     # Updates home.example.com
+      - office   # Updates office.example.com
+      - "@"      # Updates example.com itself
+  - zone: another.com
+    records:
+      - ""       # Updates another.com itself' \
            -e OVH_APPLICATION_KEY=your_app_key \
            -e OVH_APPLICATION_SECRET=your_app_secret \
            -e OVH_CONSUMER_KEY=your_consumer_key \
+           -e OVH_ENDPOINT=ovh-eu \
            ghcr.io/mangelajo/ovh-dns-updater:latest
 ```
 
@@ -62,11 +71,13 @@ kubectl create configmap ovh-dns-updater-config \
     --from-literal=domains.yaml='domains:
   - zone: example.com
     records:
-      - home
-      - office
+      - home     # Updates home.example.com
+      - office   # Updates office.example.com
+      - "@"      # Updates example.com itself
   - zone: another.com
     records:
-      - vpn'
+      - vpn      # Updates vpn.another.com
+      - ""       # Updates another.com itself'
 ```
 
 3. Deploy the application:
