@@ -19,6 +19,42 @@ The application is configured using environment variables:
 - `OVH_APPLICATION_KEY`: Your OVH API application key
 - `OVH_APPLICATION_SECRET`: Your OVH API application secret
 - `OVH_CONSUMER_KEY`: Your OVH API consumer key
+- `OVH_ENDPOINT`: Your OVH API endpoint (e.g., "ovh-eu", "ovh-us", "ovh-ca")
+
+### Obtaining OVH API Keys
+
+To use this application, you need to obtain API credentials from OVH. Follow these steps:
+
+1. Go to the OVH API key creation page for your region:
+   - Europe: https://eu.api.ovh.com/createToken/
+   - US: https://api.us.ovhcloud.com/createToken/
+   - Canada: https://ca.api.ovh.com/createToken/
+
+2. Log in with your OVH account credentials.
+
+3. Fill in the following information:
+   - Application name (e.g., "OVH DNS Updater")
+   - Application description (optional)
+   - Validity period (choose based on your needs)
+
+4. For API access rights, add the following permissions:
+   - GET /domain/zone/*
+   - PUT /domain/zone/*
+   - POST /domain/zone/*
+
+5. Click "Create keys" to generate your credentials.
+
+6. You will receive three keys:
+   - Application Key (AK)
+   - Application Secret (AS)
+   - Consumer Key (CK)
+
+7. Save these keys securely as they will be used to configure the application.
+
+8. Set the appropriate endpoint based on your OVH region:
+   - Europe: "ovh-eu"
+   - US: "ovh-us"
+   - Canada: "ovh-ca"
 
 Example domains configuration:
 ```yaml
@@ -62,7 +98,8 @@ docker run -e DOMAINS_CONFIG='domains:
 kubectl create secret generic ovh-dns-updater-secret \
     --from-literal=OVH_APPLICATION_KEY=your_app_key \
     --from-literal=OVH_APPLICATION_SECRET=your_app_secret \
-    --from-literal=OVH_CONSUMER_KEY=your_consumer_key
+    --from-literal=OVH_CONSUMER_KEY=your_consumer_key \
+    --from-literal=OVH_ENDPOINT=ovh-eu
 ```
 
 2. Create a ConfigMap with your domains configuration:
