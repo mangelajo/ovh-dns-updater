@@ -1,41 +1,29 @@
 package main
 
 import (
-	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
-func TestGetCurrentIPFormat(t *testing.T) {
-	ip, err := getCurrentIP()
+func TestGetPublicIP(t *testing.T) {
+	// Create a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("1.2.3.4"))
+	}))
+	defer server.Close()
+
+	// Create IP checker with test server
+	checker := &IPChecker{
+		endpoints: []string{server.URL},
+	}
+
+	// Test getting IP
+	ip, err := checker.GetPublicIP()
 	if err != nil {
-		t.Fatalf("Failed to get IP: %v", err)
+		t.Errorf("Expected no error, got %v", err)
 	}
-
-	// Parse the IP address
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		t.Errorf("Invalid IP address format: %s", ip)
-	}
-
-	// Check if it's an IPv4 address
-	if parsedIP.To4() == nil {
-		t.Errorf("Not an IPv4 address: %s", ip)
-	}
-}
-
-func TestGetCurrentIPConsistency(t *testing.T) {
-	// Get IP twice and compare
-	ip1, err := getCurrentIP()
-	if err != nil {
-		t.Fatalf("Failed to get first IP: %v", err)
-	}
-
-	ip2, err := getCurrentIP()
-	if err != nil {
-		t.Fatalf("Failed to get second IP: %v", err)
-	}
-
-	if ip1 != ip2 {
-		t.Errorf("Inconsistent IP addresses: %s != %s", ip1, ip2)
+	if ip != "1.2.3.4" {
+		t.Errorf("Expected IP 1.2.3.4, got %s", ip)
 	}
 }

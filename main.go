@@ -2,166 +2,137 @@ package main
 
 import (
         "fmt"
-        "io"
         "log"
-        "net/http"
         "os"
         "time"
 
         "github.com/ovh/go-ovh/ovh"
+        "gopkg.in/yaml.v3"
 )
 
-type Config struct {
-        OVHApplicationKey    string
-        OVHApplicationSecret string
-        OVHConsumerKey      string
-        OVHEndpoint         string
-        DNSZone            string
-        DNSRecord          string
-        CheckInterval       time.Duration
+type recordUpdate struct {
+        Target string `json:"target"`
 }
 
-func loadConfig() (*Config, error) {
-        interval, err := time.ParseDuration(getEnvWithDefault("CHECK_INTERVAL", "5m"))
-        if err != nil {
-                return nil, fmt.Errorf("invalid CHECK_INTERVAL: %v", err)
-        }
-
-        requiredVars := []string{
-                "OVH_APPLICATION_KEY",
-                "OVH_APPLICATION_SECRET",
-                "OVH_CONSUMER_KEY",
-                "DNS_ZONE",
-        }
-
-        for _, v := range requiredVars {
-                if os.Getenv(v) == "" {
-                        return nil, fmt.Errorf("environment variable %s is required", v)
-                }
-        }
-
-        return &Config{
-                OVHApplicationKey:    os.Getenv("OVH_APPLICATION_KEY"),
-                OVHApplicationSecret: os.Getenv("OVH_APPLICATION_SECRET"),
-                OVHConsumerKey:      os.Getenv("OVH_CONSUMER_KEY"),
-                OVHEndpoint:         getEnvWithDefault("OVH_ENDPOINT", "ovh-eu"),
-                DNSZone:            os.Getenv("DNS_ZONE"),
-                DNSRecord:          os.Getenv("DNS_RECORD"),
-                CheckInterval:       interval,
-        }, nil
-}
-
-func getEnvOrFatal(key string) string {
-        if value := os.Getenv(key); value != "" {
-                return value
-        }
-        if os.Getenv("TEST_MODE") != "" {
-                return ""
-        }
-        log.Fatalf("Environment variable %s is required", key)
-        return ""
-}
-
-func getEnvWithDefault(key, defaultValue string) string {
-        if value := os.Getenv(key); value != "" {
-                return value
-        }
-        return defaultValue
-}
-
-func getCurrentIP() (string, error) {
-        resp, err := http.Get("https://api.ipify.org")
-        if err != nil {
-                return "", err
-        }
-        defer resp.Body.Close()
-
-        ip, err := io.ReadAll(resp.Body)
-        if err != nil {
-                return "", err
-        }
-
-        return string(ip), nil
-}
-
-func updateDNSRecord(client *ovh.Client, config *Config, currentIP string) error {
-        // Get the record ID first
+func updateDNS(client *ovh.Client, zone, record, ip string) {
+        // Get the record ID
         var records []int
         var err error
-        
-        // Build the query based on whether we have a subdomain
-        query := fmt.Sprintf("/domain/zone/%s/record?fieldType=A", config.DNSZone)
-        if config.DNSRecord != "" {
-                query = fmt.Sprintf("%s&subDomain=%s", query, config.DNSRecord)
-        }
-        
-        err = client.Get(query, &records)
-        if err != nil {
-                return fmt.Errorf("failed to get DNS records: %v", err)
+
+        if record == "@" || record == "" {
+                // For apex domain (@ or empty string)
+                err = client.Get(fmt.Sprintf("/domain/zone/%s/record?fieldType=A&subDomain=", zone), &records)
+                if err != nil {
+                        log.Printf("Error getting DNS records for %s: %v", zone, err)
+                        return
+                }
+        } else {
+                // For subdomains
+                err = client.Get(fmt.Sprintf("/domain/zone/%s/record?fieldType=A&subDomain=%s", zone, record), &records)
+                if err != nil {
+                        log.Printf("Error getting DNS records for %s.%s: %v", record, zone, err)
+                        return
+                }
         }
 
         if len(records) == 0 {
-                return fmt.Errorf("no matching DNS record found")
+                if record == "@" || record == "" {
+                        log.Printf("No DNS record found for %s", zone)
+                } else {
+                        log.Printf("No DNS record found for %s.%s", record, zone)
+                }
+                return
         }
 
         // Update the record
-        type RecordUpdate struct {
-                Target string `json:"target"`
-        }
-        
-        update := RecordUpdate{Target: currentIP}
-        var result interface{}
-        err = client.Put(fmt.Sprintf("/domain/zone/%s/record/%d", 
-                config.DNSZone, records[0]), &update, &result)
+        update := recordUpdate{Target: ip}
+
+        recordID := records[0]
+        err = client.Put(fmt.Sprintf("/domain/zone/%s/record/%d", zone, recordID), &update, nil)
         if err != nil {
-                return fmt.Errorf("failed to update DNS record: %v", err)
+                log.Printf("Error updating DNS record %s.%s: %v", record, zone, err)
+                return
         }
 
         // Refresh the zone
-        err = client.Post(fmt.Sprintf("/domain/zone/%s/refresh", config.DNSZone), nil, &result)
+        err = client.Post(fmt.Sprintf("/domain/zone/%s/refresh", zone), nil, nil)
         if err != nil {
-                return fmt.Errorf("failed to refresh DNS zone: %v", err)
+                log.Printf("Error refreshing DNS zone %s: %v", zone, err)
+                return
         }
 
-        return nil
+        if record == "@" || record == "" {
+                log.Printf("Updated DNS record for %s to %s", zone, ip)
+        } else {
+                log.Printf("Updated DNS record %s.%s to %s", record, zone, ip)
+        }
+}
+
+func updateAllDomains(client *ovh.Client, domains []DomainConfig, ip string) {
+        for _, domain := range domains {
+                for _, record := range domain.Records {
+                        updateDNS(client, domain.Zone, record, ip)
+                }
+        }
 }
 
 func main() {
-        config, err := loadConfig()
-        if err != nil {
-                log.Fatalf("Failed to load configuration: %v", err)
+        // Load configuration from environment variables
+        configYAML := os.Getenv("DOMAINS_CONFIG")
+        if configYAML == "" {
+                log.Fatal("DOMAINS_CONFIG environment variable is required")
         }
 
-        client, err := ovh.NewClient(
-                config.OVHEndpoint,
-                config.OVHApplicationKey,
-                config.OVHApplicationSecret,
-                config.OVHConsumerKey,
-        )
+        var config Config
+        err := yaml.Unmarshal([]byte(configYAML), &config)
         if err != nil {
-                log.Fatalf("Failed to create OVH client: %v", err)
+                log.Fatalf("Error parsing DOMAINS_CONFIG: %v", err)
         }
 
-        var lastIP string
-        for {
-                currentIP, err := getCurrentIP()
+        // Initialize OVH client
+        client, err := ovh.NewDefaultClient()
+        if err != nil {
+                log.Fatalf("Error initializing OVH client: %v", err)
+        }
+
+        // Initialize IP checker
+        ipChecker := NewIPChecker()
+
+        // Get check interval from environment variable
+        checkInterval := os.Getenv("CHECK_INTERVAL")
+        if checkInterval == "" {
+                checkInterval = "5m"
+        }
+
+        interval, err := time.ParseDuration(checkInterval)
+        if err != nil {
+                log.Fatalf("Invalid CHECK_INTERVAL: %v", err)
+        }
+
+        // Get initial IP
+        currentIP, err := ipChecker.GetPublicIP()
+        if err != nil {
+                log.Printf("Error getting initial public IP: %v", err)
+        } else {
+                log.Printf("Initial public IP: %s", currentIP)
+                updateAllDomains(client, config.Domains, currentIP)
+        }
+
+        // Start monitoring for IP changes
+        ticker := time.NewTicker(interval)
+        defer ticker.Stop()
+
+        for range ticker.C {
+                newIP, err := ipChecker.GetPublicIP()
                 if err != nil {
-                        log.Printf("Failed to get current IP: %v", err)
-                        time.Sleep(config.CheckInterval)
+                        log.Printf("Error getting public IP: %v", err)
                         continue
                 }
 
-                if currentIP != lastIP {
-                        log.Printf("IP changed from %s to %s", lastIP, currentIP)
-                        err = updateDNSRecord(client, config, currentIP)
-                        if err != nil {
-                                log.Printf("Failed to update DNS record: %v", err)
-                        } else {
-                                lastIP = currentIP
-                                log.Printf("Successfully updated DNS record")
-                        }
+                if newIP != currentIP {
+                        log.Printf("Public IP changed from %s to %s", currentIP, newIP)
+                        updateAllDomains(client, config.Domains, newIP)
+                        currentIP = newIP
                 }
-
-                time.Sleep(config.CheckInterval)
         }
 }

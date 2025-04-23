@@ -1,210 +1,171 @@
 package main
 
 import (
+        "fmt"
+        "net/http"
+        "net/http/httptest"
         "os"
+        "strings"
         "testing"
         "time"
+
+        "github.com/ovh/go-ovh/ovh"
 )
 
-func TestLoadConfig(t *testing.T) {
-        testCases := []struct {
-                name     string
-                vars     map[string]string
-                wantErr  bool
-                checkDNS bool
-        }{
-                {
-                        name: "with subdomain",
-                        vars: map[string]string{
-                                "OVH_APPLICATION_KEY":    "test-key",
-                                "OVH_APPLICATION_SECRET": "test-secret",
-                                "OVH_CONSUMER_KEY":      "test-consumer",
-                                "DNS_ZONE":              "example.com",
-                                "DNS_RECORD":            "test",
-                                "CHECK_INTERVAL":        "1m",
-                        },
-                        checkDNS: true,
-                },
-                {
-                        name: "without subdomain",
-                        vars: map[string]string{
-                                "OVH_APPLICATION_KEY":    "test-key",
-                                "OVH_APPLICATION_SECRET": "test-secret",
-                                "OVH_CONSUMER_KEY":      "test-consumer",
-                                "DNS_ZONE":              "example.com",
-                                "CHECK_INTERVAL":        "1m",
-                        },
-                        checkDNS: true,
-                },
-                {
-                        name: "missing required var",
-                        vars: map[string]string{
-                                "OVH_APPLICATION_KEY": "test-key",
-                                "DNS_ZONE":           "example.com",
-                        },
-                        wantErr: true,
-                },
-        }
+func setupTestServer() *httptest.Server {
+        return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                // Handle authentication
+                if r.URL.Path == "/auth/time" {
+                        fmt.Fprintf(w, "%d", time.Now().Unix())
+                        return
+                }
 
-        for _, tc := range testCases {
-                t.Run(tc.name, func(t *testing.T) {
-                        // Clear environment
-                        os.Clearenv()
+                if r.URL.Path == "/auth/credential" {
+                        w.WriteHeader(http.StatusOK)
+                        return
+                }
 
-                        // Set environment variables
-                        for k, v := range tc.vars {
-                                os.Setenv(k, v)
-                        }
-
-                        config, err := loadConfig()
-                        
-                        if tc.wantErr {
-                                if err == nil {
-                                        t.Fatal("Expected error, got nil")
-                                }
+                // Handle DNS record queries
+                if strings.HasPrefix(r.URL.Path, "/1.0/domain/zone/") {
+                        parts := strings.Split(r.URL.Path, "/")
+                        if len(parts) < 6 {
+                                w.WriteHeader(http.StatusBadRequest)
                                 return
                         }
 
-                        if err != nil {
-                                t.Fatalf("Expected no error, got %v", err)
+                        if strings.HasSuffix(r.URL.Path, "/record") {
+                                fmt.Fprintf(w, "[1234]")
+                                return
                         }
 
-                        // Verify config values
-                        if config.OVHApplicationKey != tc.vars["OVH_APPLICATION_KEY"] {
-                                t.Errorf("Expected application key %s, got %s", tc.vars["OVH_APPLICATION_KEY"], config.OVHApplicationKey)
+                        if strings.HasSuffix(r.URL.Path, "/refresh") {
+                                w.WriteHeader(http.StatusOK)
+                                return
                         }
 
-                        if config.OVHApplicationSecret != tc.vars["OVH_APPLICATION_SECRET"] {
-                                t.Errorf("Expected application secret %s, got %s", tc.vars["OVH_APPLICATION_SECRET"], config.OVHApplicationSecret)
+                        if strings.Contains(r.URL.Path, "/record/") {
+                                w.WriteHeader(http.StatusOK)
+                                return
                         }
-
-                        if config.OVHConsumerKey != tc.vars["OVH_CONSUMER_KEY"] {
-                                t.Errorf("Expected consumer key %s, got %s", tc.vars["OVH_CONSUMER_KEY"], config.OVHConsumerKey)
-                        }
-
-                        if config.DNSZone != tc.vars["DNS_ZONE"] {
-                                t.Errorf("Expected DNS zone %s, got %s", tc.vars["DNS_ZONE"], config.DNSZone)
-                        }
-
-                        if tc.checkDNS {
-                                expectedRecord := tc.vars["DNS_RECORD"]
-                                if expectedRecord == "" {
-                                        expectedRecord = ""
-                                }
-                                if config.DNSRecord != expectedRecord {
-                                        t.Errorf("Expected DNS record %s, got %s", expectedRecord, config.DNSRecord)
-                                }
-                        }
-
-                        if interval := tc.vars["CHECK_INTERVAL"]; interval != "" {
-                                expectedDuration, _ := time.ParseDuration(interval)
-                                if config.CheckInterval != expectedDuration {
-                                        t.Errorf("Expected check interval %v, got %v", expectedDuration, config.CheckInterval)
-                                }
-                        }
-                })
-        }
-}
-
-func TestLoadConfigMissingRequired(t *testing.T) {
-        // Set test mode
-        os.Setenv("TEST_MODE", "1")
-        defer os.Unsetenv("TEST_MODE")
-        
-        // Clear all relevant environment variables
-        requiredVars := []string{
-                "OVH_APPLICATION_KEY",
-                "OVH_APPLICATION_SECRET",
-                "OVH_CONSUMER_KEY",
-                "DNS_ZONE",
-        }
-
-        // First test: missing required variables should fail
-        for _, v := range requiredVars {
-                t.Run("missing "+v, func(t *testing.T) {
-                        // Clear environment
-                        os.Clearenv()
-                        os.Setenv("TEST_MODE", "1")
-
-                        // Set all variables except one
-                        for _, other := range requiredVars {
-                                if other != v {
-                                        os.Setenv(other, "test-value")
-                                }
-                        }
-
-                        _, err := loadConfig()
-                        if err == nil {
-                                t.Errorf("Expected error when %s is missing", v)
-                        }
-                })
-        }
-
-        // Second test: missing DNS_RECORD should not fail
-        t.Run("missing DNS_RECORD", func(t *testing.T) {
-                // Clear environment
-                os.Clearenv()
-                os.Setenv("TEST_MODE", "1")
-
-                // Set all required variables
-                for _, v := range requiredVars {
-                        os.Setenv(v, "test-value")
                 }
 
-                _, err := loadConfig()
-                if err != nil {
-                        t.Errorf("Expected no error when DNS_RECORD is missing, got: %v", err)
-                }
-        })
+                w.WriteHeader(http.StatusNotFound)
+        }))
 }
 
-func TestGetCurrentIP(t *testing.T) {
-        ip, err := getCurrentIP()
+func TestUpdateDNS(t *testing.T) {
+        server := setupTestServer()
+        defer server.Close()
+
+        // Set environment variables for OVH client
+        os.Setenv("OVH_ENDPOINT", server.URL)
+        os.Setenv("OVH_APPLICATION_KEY", "test")
+        os.Setenv("OVH_APPLICATION_SECRET", "test")
+        os.Setenv("OVH_CONSUMER_KEY", "test")
+        defer func() {
+                os.Unsetenv("OVH_ENDPOINT")
+                os.Unsetenv("OVH_APPLICATION_KEY")
+                os.Unsetenv("OVH_APPLICATION_SECRET")
+                os.Unsetenv("OVH_CONSUMER_KEY")
+        }()
+
+        // Initialize OVH client
+        client, err := ovh.NewDefaultClient()
         if err != nil {
-                t.Fatalf("Expected no error getting IP, got %v", err)
+                t.Fatalf("Failed to create OVH client: %v", err)
         }
 
-        // Very basic IP format validation
-        if len(ip) < 7 { // minimum valid IP length (e.g., "1.1.1.1")
-                t.Errorf("IP address seems too short: %s", ip)
-        }
+        // Test updating DNS record
+        updateDNS(client, "example.com", "test", "1.2.3.4")
 }
 
-func TestGetEnvWithDefault(t *testing.T) {
-        testCases := []struct {
-                name         string
-                key          string
-                value        string
-                defaultValue string
-                expected     string
-        }{
+func TestUpdateAllDomains(t *testing.T) {
+        server := setupTestServer()
+        defer server.Close()
+
+        // Set environment variables for OVH client
+        os.Setenv("OVH_ENDPOINT", server.URL)
+        os.Setenv("OVH_APPLICATION_KEY", "test")
+        os.Setenv("OVH_APPLICATION_SECRET", "test")
+        os.Setenv("OVH_CONSUMER_KEY", "test")
+        defer func() {
+                os.Unsetenv("OVH_ENDPOINT")
+                os.Unsetenv("OVH_APPLICATION_KEY")
+                os.Unsetenv("OVH_APPLICATION_SECRET")
+                os.Unsetenv("OVH_CONSUMER_KEY")
+        }()
+
+        // Initialize OVH client
+        client, err := ovh.NewDefaultClient()
+        if err != nil {
+                t.Fatalf("Failed to create OVH client: %v", err)
+        }
+
+        // Test domains
+        domains := []DomainConfig{
                 {
-                        name:         "existing value",
-                        key:          "TEST_KEY_1",
-                        value:        "test-value",
-                        defaultValue: "default",
-                        expected:     "test-value",
+                        Zone:    "example.com",
+                        Records: []string{"home", "office", "@"},
                 },
                 {
-                        name:         "use default",
-                        key:          "TEST_KEY_2",
-                        value:        "",
-                        defaultValue: "default",
-                        expected:     "default",
+                        Zone:    "another.com",
+                        Records: []string{"vpn", ""},
                 },
         }
 
-        for _, tc := range testCases {
-                t.Run(tc.name, func(t *testing.T) {
-                        if tc.value != "" {
-                                os.Setenv(tc.key, tc.value)
-                                defer os.Unsetenv(tc.key)
-                        }
+        // Test updating multiple domains
+        updateAllDomains(client, domains, "1.2.3.4")
+}
 
-                        result := getEnvWithDefault(tc.key, tc.defaultValue)
-                        if result != tc.expected {
-                                t.Errorf("Expected %s, got %s", tc.expected, result)
+func TestMainFunction(t *testing.T) {
+        server := setupTestServer()
+        defer server.Close()
+
+        // Set environment variables
+        os.Setenv("OVH_ENDPOINT", server.URL)
+        os.Setenv("OVH_APPLICATION_KEY", "test")
+        os.Setenv("OVH_APPLICATION_SECRET", "test")
+        os.Setenv("OVH_CONSUMER_KEY", "test")
+        os.Setenv("DOMAINS_CONFIG", `
+domains:
+  - zone: example.com
+    records: ["test1", "test2", "@"]
+  - zone: another.com
+    records: ["test3", ""]
+`)
+        os.Setenv("CHECK_INTERVAL", "1s")
+        defer func() {
+                os.Unsetenv("OVH_ENDPOINT")
+                os.Unsetenv("OVH_APPLICATION_KEY")
+                os.Unsetenv("OVH_APPLICATION_SECRET")
+                os.Unsetenv("OVH_CONSUMER_KEY")
+                os.Unsetenv("DOMAINS_CONFIG")
+                os.Unsetenv("CHECK_INTERVAL")
+        }()
+
+        // Create a channel to stop the main function
+        done := make(chan bool)
+        go func() {
+                time.Sleep(2 * time.Second)
+                done <- true
+        }()
+
+        // Run main in a goroutine
+        go func() {
+                defer func() {
+                        if r := recover(); r != nil {
+                                // Expected panic when main exits
+                                done <- true
                         }
-                })
+                }()
+                main()
+        }()
+
+        // Wait for completion or timeout
+        select {
+        case <-done:
+                // Success
+        case <-time.After(5 * time.Second):
+                t.Fatal("Test timed out")
         }
 }
