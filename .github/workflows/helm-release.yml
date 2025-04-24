@@ -1,0 +1,57 @@
+name: Release Helm Chart
+
+on:
+  push:
+    tags:
+      - 'v*'
+    paths:
+      - 'charts/**'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION=$(git rev-parse --short HEAD)
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          # Update Chart.yaml with the version
+          sed -i "s/version: 0.1.0/version: $VERSION/" charts/ovh-dns-updater/Chart.yaml
+          sed -i "s/appVersion: \"latest\"/appVersion: \"$VERSION\"/" charts/ovh-dns-updater/Chart.yaml
+
+      - name: Package Helm chart
+        run: |
+          mkdir -p .cr-release-packages
+          helm package charts/ovh-dns-updater --destination .cr-release-packages
+
+      - name: Push Helm chart to GHCR
+        run: |
+          echo "Pushing Helm chart to GHCR..."
+          helm push .cr-release-packages/ovh-dns-updater-${{ steps.get_version.outputs.VERSION }}.tgz oci://ghcr.io/mangelajo/ovh-dns-updater-helm
