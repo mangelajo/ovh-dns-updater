@@ -57,4 +57,4 @@ jobs:
       - name: Push Helm chart to GHCR
         run: |
           echo "Pushing Helm chart to GHCR..."
-          helm push .cr-release-packages/ovh-dns-updater-${{ steps.get_version.outputs.VERSION }}.tgz oci://ghcr.io/mangelajo/ovh-dns-updater-helm
+          helm push .cr-release-packages/ovh-dns-updater-${{ steps.get_version.outputs.VERSION }}.tgz oci://ghcr.io/mangelajo/charts
