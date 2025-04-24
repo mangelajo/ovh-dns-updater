@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'main'
   workflow_dispatch:
 
 jobs:
@@ -36,6 +38,9 @@ jobs:
         run: |
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             VERSION=${GITHUB_REF#refs/tags/v}
+          elif [[ $GITHUB_REF == refs/heads/main ]]; then
+            TIMESTAMP=$(date +%s)
+            VERSION="0.0.0-main-${TIMESTAMP}"
           else
             VERSION=$(git rev-parse --short HEAD)
           fi
