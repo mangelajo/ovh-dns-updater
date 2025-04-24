@@ -2,10 +2,13 @@
 
 # Variables
 APP_NAME := ovh-dns-updater
-DOCKER_REPO := # Add your Docker repository here
+CONTAINER_REPO := # Add your container repository here
 VERSION := $(shell git describe --tags --always --dirty)
 HELM_CHART_PATH := charts/ovh-dns-updater
 HELM_REPO := # Add your Helm repository here
+
+# Container engine detection (docker or podman)
+CONTAINER_ENGINE ?= $(shell command -v podman > /dev/null 2> /dev/null && echo podman || echo docker)
 
 # Go related variables
 GOFILES := $(wildcard *.go)
@@ -37,21 +40,21 @@ clean:
 	rm -f $(APP_NAME)
 	rm -f coverage.out coverage.html
 
-# Build Docker image
-.PHONY: docker-build
-docker-build:
-	@echo "Building Docker image..."
-	docker build -t $(APP_NAME):$(VERSION) .
-	docker tag $(APP_NAME):$(VERSION) $(APP_NAME):latest
+# Build container image
+.PHONY: container-build
+container-build:
+	@echo "Building container image with $(CONTAINER_ENGINE)..."
+	$(CONTAINER_ENGINE) build -t $(APP_NAME):$(VERSION) .
+	$(CONTAINER_ENGINE) tag $(APP_NAME):$(VERSION) $(APP_NAME):latest
 
-# Push Docker image
-.PHONY: docker-push
-docker-push: docker-build
-	@echo "Pushing Docker image..."
-	docker tag $(APP_NAME):$(VERSION) $(DOCKER_REPO)/$(APP_NAME):$(VERSION)
-	docker tag $(APP_NAME):$(VERSION) $(DOCKER_REPO)/$(APP_NAME):latest
-	docker push $(DOCKER_REPO)/$(APP_NAME):$(VERSION)
-	docker push $(DOCKER_REPO)/$(APP_NAME):latest
+# Push container image
+.PHONY: container-push
+container-push: container-build
+	@echo "Pushing container image with $(CONTAINER_ENGINE)..."
+	$(CONTAINER_ENGINE) tag $(APP_NAME):$(VERSION) $(CONTAINER_REPO)/$(APP_NAME):$(VERSION)
+	$(CONTAINER_ENGINE) tag $(APP_NAME):$(VERSION) $(CONTAINER_REPO)/$(APP_NAME):latest
+	$(CONTAINER_ENGINE) push $(CONTAINER_REPO)/$(APP_NAME):$(VERSION)
+	$(CONTAINER_ENGINE) push $(CONTAINER_REPO)/$(APP_NAME):latest
 
 # Lint Helm chart
 .PHONY: helm-lint
@@ -85,11 +88,11 @@ run: build
 
 # All-in-one target for CI/CD
 .PHONY: ci
-ci: test docker-build helm-package
+ci: test container-build helm-package
 
 # Release target - builds, tests, packages and pushes everything
 .PHONY: release
-release: test docker-push helm-push
+release: test container-push helm-push
 	@echo "Release $(VERSION) completed!"
 
 # Default target
@@ -104,8 +107,8 @@ help:
 	@echo "  test           - Run tests"
 	@echo "  test-coverage  - Run tests with coverage report"
 	@echo "  clean          - Clean build artifacts"
-	@echo "  docker-build   - Build Docker image"
-	@echo "  docker-push    - Build and push Docker image"
+	@echo "  container-build - Build container image with $(CONTAINER_ENGINE)"
+	@echo "  container-push  - Build and push container image with $(CONTAINER_ENGINE)"
 	@echo "  helm-lint      - Lint Helm chart"
 	@echo "  helm-package   - Package Helm chart"
 	@echo "  helm-push      - Package and push Helm chart"
