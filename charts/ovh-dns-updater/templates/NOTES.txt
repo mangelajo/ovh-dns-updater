@@ -1,0 +1,17 @@
+OVH DNS Updater has been deployed!
+
+The application will monitor your public IP address and update the configured DNS records in OVH when changes are detected.
+
+Configuration:
+- Check interval: {{ .Values.config.checkInterval }}
+- OVH endpoint: {{ .Values.config.ovhEndpoint }}
+
+Configured domains:
+{{- range .Values.config.domains }}
+- {{ .zone }}:
+  {{- range .records }}
+  * {{ if eq . "" }}@ (apex domain){{ else if eq . "@" }}@ (apex domain){{ else }}{{ . }}{{ end }}
+  {{- end }}
+{{- end }}
+
+For more information, please visit: https://github.com/mangelajo/ovh-dns-updater

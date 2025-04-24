@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ovh-dns-updater
+description: A Helm chart for OVH DNS Updater
+type: application
+version: 0.1.0
+appVersion: "latest"

@@ -1,0 +1,77 @@
+# Default values for ovh-dns-updater
+replicaCount: 1
+
+image:
+  repository: ghcr.io/mangelajo/ovh-dns-updater
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application configuration
+config:
+  # How often to check for IP changes (default: "5m")
+  checkInterval: "5m"
+  # OVH API endpoint (e.g., "ovh-eu", "ovh-us", "ovh-ca")
+  ovhEndpoint: "ovh-eu"
+  # OVH API credentials - should be provided via secret
+  ovhCredentials:
+    # Set to true to create a secret from the values provided below
+    create: false
+    # Existing secret name to use if create is false
+    existingSecret: ""
+    # OVH API credentials - only used if create is true
+    applicationKey: ""
+    applicationSecret: ""
+    consumerKey: ""
+  
+  # Domain configuration
+  domains:
+    # Example configuration - replace with your actual domains and records
+    - zone: example.com
+      records:
+        - home     # Updates home.example.com
+        - office   # Updates office.example.com
+        - "@"      # Updates example.com (apex domain)
+    - zone: another.com
+      records:
+        - vpn      # Updates vpn.another.com
+        - ""       # Updates another.com (apex domain)
