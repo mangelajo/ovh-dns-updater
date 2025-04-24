@@ -91,7 +91,62 @@ docker run -e DOMAINS_CONFIG='domains:
            ghcr.io/mangelajo/ovh-dns-updater:latest
 ```
 
-## Running in Kubernetes
+## Installation
+
+### Running with Helm
+
+The easiest way to deploy OVH DNS Updater in Kubernetes is using the provided Helm chart:
+
+1. Add the Helm repository:
+```bash
+helm repo add ovh-dns-updater https://mangelajo.github.io/ovh-dns-updater/
+helm repo update
+```
+
+2. Create a values.yaml file with your configuration:
+```yaml
+# values.yaml
+config:
+  checkInterval: "5m"
+  ovhEndpoint: "ovh-eu"
+  
+  # Domain configuration
+  domains:
+    - zone: example.com
+      records:
+        - home
+        - office
+        - "@"
+    - zone: another.com
+      records:
+        - vpn
+        - ""
+
+  ovhCredentials:
+    create: true
+    applicationKey: "your_app_key"
+    applicationSecret: "your_app_secret"
+    consumerKey: "your_consumer_key"
+```
+
+3. Install the chart:
+```bash
+helm install ovh-dns-updater ovh-dns-updater/ovh-dns-updater -f values.yaml
+```
+
+Or install directly from the git repository:
+```bash
+helm install ovh-dns-updater https://github.com/mangelajo/ovh-dns-updater/releases/latest/download/ovh-dns-updater-0.1.0.tgz -f values.yaml
+```
+
+4. Upgrade an existing installation:
+```bash
+helm upgrade ovh-dns-updater ovh-dns-updater/ovh-dns-updater -f values.yaml
+```
+
+### Running in Kubernetes (Manual Deployment)
+
+If you prefer to deploy without Helm, follow these steps:
 
 1. Create a secret with your OVH credentials:
 ```bash
